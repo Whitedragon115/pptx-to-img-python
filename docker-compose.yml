@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: pptx-converter-api
     ports:
-      - "5000:5000"
+      - "5012:5000"
     volumes:
       # 掛載臨時檔案目錄到主機 (可選，用於持久化)
       - ./docker-temp:/app/temp
