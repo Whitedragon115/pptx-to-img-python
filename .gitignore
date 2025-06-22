@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Application specific
+temp/
+docker-temp/
+docker-logs/
+uploads/
+logs/
+*.pptx
+*.pdf
+*.jpg
+*.jpeg
+*.png
+
+# Docker
+docker-config/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Test files
+test_*.html
+*_test.html

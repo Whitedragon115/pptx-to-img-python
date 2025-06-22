@@ -1,12 +1,16 @@
-"""
-PPTX 轉換器模組
-處理 PPTX 到 PDF 和圖片的轉換
-"""
 import os
 import shutil
 import subprocess
+import zipfile
+import xml.etree.ElementTree as ET
 from pdf2image import convert_from_path
 from .config import Config
+
+try:
+    from pptx import Presentation
+    PPTX_AVAILABLE = True
+except ImportError:
+    PPTX_AVAILABLE = False
 
 
 class PPTXConverter:
@@ -14,57 +18,102 @@ class PPTXConverter:
         self.libreoffice_path = Config.LIBREOFFICE_PATH
     
     def is_libreoffice_available(self):
-        """檢查 LibreOffice 是否可用"""
-        # 使用 shutil.which 檢查系統路徑中的命令
         if shutil.which(self.libreoffice_path):
             return True
-        # 如果是絕對路徑，檢查檔案是否存在
-        if os.path.isabs(self.libreoffice_path):
-            return os.path.exists(self.libreoffice_path)
+        
+        if os.path.isabs(self.libreoffice_path) and os.path.exists(self.libreoffice_path):
+            return True
+            
+        common_paths = [
+            'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
+            'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',
+            '/usr/bin/libreoffice',
+            '/opt/libreoffice/program/soffice'
+        ]
+        
+        for path in common_paths:
+            if os.path.exists(path):
+                self.libreoffice_path = path
+                return True
+                
         return False
     
+    def _process_hidden_slides(self, pptx_file, output_dir):
+        try:
+            base_name = os.path.splitext(os.path.basename(pptx_file))[0]
+            processed_file = os.path.join(output_dir, f"{base_name}_unhidden.pptx")
+            shutil.copy2(pptx_file, processed_file)
+
+            with zipfile.ZipFile(processed_file, 'r') as zin:
+                file_buffer = {name: zin.read(name) for name in zin.namelist()}
+
+            namespaces = {
+                'p': 'http://schemas.openxmlformats.org/presentationml/2006/main',
+                'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+            }
+            ET.register_namespace('', namespaces['p'])
+            ET.register_namespace('r', namespaces['r'])
+
+            if 'ppt/presentation.xml' in file_buffer:
+                presentation_root = ET.fromstring(file_buffer['ppt/presentation.xml'])
+                slide_refs = presentation_root.findall('.//p:sldId', namespaces)
+                for slide_ref in slide_refs:
+                    if slide_ref.get('show') == '0':
+                        slide_ref.set('show', '1')
+                    elif slide_ref.get('show') is None:
+                        slide_ref.set('show', '1')
+                file_buffer['ppt/presentation.xml'] = ET.tostring(presentation_root, encoding='utf-8', xml_declaration=True)
+
+            slide_files = [name for name in file_buffer if name.startswith('ppt/slides/slide') and name.endswith('.xml')]
+            for slide_file in slide_files:
+                try:
+                    slide_root = ET.fromstring(file_buffer[slide_file])
+                    if slide_root.tag.endswith('sld'):
+                        if 'show' in slide_root.attrib and slide_root.attrib['show'] == '0':
+                            slide_root.attrib['show'] = '1'
+                        elif 'show' not in slide_root.attrib:
+                            slide_root.attrib['show'] = '1'
+                        file_buffer[slide_file] = ET.tostring(slide_root, encoding='utf-8', xml_declaration=True)
+                except Exception:
+                    continue
+
+            with zipfile.ZipFile(processed_file + '.tmp', 'w', zipfile.ZIP_DEFLATED) as zout:
+                for name, data in file_buffer.items():
+                    zout.writestr(name, data)
+            shutil.move(processed_file + '.tmp', processed_file)
+            return processed_file
+        except Exception:
+            return None
+    
     def convert_pptx_to_pdf(self, pptx_file, output_dir, include_hidden_slides=True):
-        """
-        使用 LibreOffice 將 PPTX 轉換為 PDF
-        
-        Args:
-            pptx_file (str): PPTX 檔案路徑
-            output_dir (str): 輸出目錄
-            include_hidden_slides (bool): 是否包含隱藏的投影片，預設為 True
-            
-        Returns:
-            tuple: (success: bool, result: str)
-        """
         if not self.is_libreoffice_available():
             return False, "找不到 LibreOffice"
-        
+
+        original_file = pptx_file
+        if include_hidden_slides and PPTX_AVAILABLE:
+            processed_file = self._process_hidden_slides(pptx_file, output_dir)
+            if processed_file:
+                pptx_file = processed_file
+
         pptx_path = os.path.abspath(pptx_file)
         
-        # 取得 LibreOffice 實際執行檔路徑
         libreoffice_exec = shutil.which(self.libreoffice_path) or self.libreoffice_path
         
-        # 根據是否包含隱藏頁面來構建命令
-        if include_hidden_slides:
-            cmd_pdf = [
-                libreoffice_exec,
-                "--headless",
-                "--convert-to", "pdf",
-                "--outdir", output_dir,
-                "--infilter=impress_pdf_Export",
-                "--filter-options=ExportHiddenSlides=true",
-                pptx_path
-            ]
-        else:
-            cmd_pdf = [
-                libreoffice_exec,
-                "--headless",
-                "--convert-to", "pdf",
-                "--outdir", output_dir,
-                pptx_path
-            ]
+        if not os.path.exists(libreoffice_exec) and not shutil.which(libreoffice_exec):
+            return False, f"LibreOffice 執行檔不存在: {libreoffice_exec}"
+        
+        os.makedirs(output_dir, exist_ok=True)
+        
+        cmd_pdf = [
+            libreoffice_exec,
+            "--headless",
+            "--invisible",
+            "--convert-to", "pdf",
+            "--outdir", output_dir,
+            pptx_path
+        ]
         
         try:
-            # 根據作業系統設定編碼
             encoding = 'cp950' if os.name == 'nt' else 'utf-8'
             
             result = subprocess.run(
@@ -80,12 +129,22 @@ class PPTXConverter:
                 error_msg = result.stderr if result.stderr else result.stdout
                 return False, f"PDF 轉換失敗: {error_msg}"
             
-            # 找到 PDF 檔案
+            import time
+            time.sleep(1)
+            
             pdf_files = [f for f in os.listdir(output_dir) if f.endswith('.pdf')]
+            
             if not pdf_files:
                 return False, "找不到產生的 PDF 檔案"
             
             pdf_file = os.path.join(output_dir, pdf_files[0])
+            
+            if pptx_file != original_file and os.path.exists(pptx_file):
+                try:
+                    os.remove(pptx_file)
+                except:
+                    pass
+            
             return True, pdf_file
             
         except subprocess.TimeoutExpired:
@@ -94,17 +153,6 @@ class PPTXConverter:
             return False, f"轉換過程中發生錯誤: {str(e)}"
     
     def convert_pdf_to_images(self, pdf_path, output_dir, dpi=200):
-        """
-        將 PDF 轉換為圖片
-        
-        Args:
-            pdf_path (str): PDF 檔案路徑
-            output_dir (str): 輸出目錄
-            dpi (int): 圖片解析度
-            
-        Returns:
-            tuple: (success: bool, result: list or str)
-        """
         try:
             pages = convert_from_path(pdf_path, dpi=dpi)
             image_paths = []
@@ -121,38 +169,29 @@ class PPTXConverter:
             return False, f"圖片轉換失敗: {str(e)}"
     
     def convert_pptx_to_all(self, pptx_file, output_dir, dpi=200, include_hidden_slides=True):
-        """
-        完整轉換流程：PPTX -> PDF -> 圖片
-        
-        Args:
-            pptx_file (str): PPTX 檔案路徑
-            output_dir (str): 輸出目錄
-            dpi (int): 圖片解析度
-            include_hidden_slides (bool): 是否包含隱藏的投影片，預設為 True
-            
-        Returns:
-            dict: 轉換結果
-        """
         result = {
             'success': False,
             'pdf_file': None,
             'image_files': [],
             'error': None,
-            'total_pages': 0
+            'total_pages': 0,
+            'hidden_slides_processed': False
         }
         
-        # 步驟 1: 轉換為 PDF
         pdf_success, pdf_result = self.convert_pptx_to_pdf(pptx_file, output_dir, include_hidden_slides)
         if not pdf_success:
             result['error'] = pdf_result
             return result
         
         result['pdf_file'] = os.path.basename(pdf_result)
+        result['hidden_slides_processed'] = include_hidden_slides and PPTX_AVAILABLE
         
-        # 步驟 2: 轉換為圖片
         image_success, image_result = self.convert_pdf_to_images(pdf_result, output_dir, dpi)
         if not image_success:
             result['error'] = image_result
+            result['success'] = True
+            result['total_pages'] = 0
+            result['image_files'] = []
             return result
         
         result['image_files'] = image_result

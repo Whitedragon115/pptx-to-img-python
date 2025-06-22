@@ -59,7 +59,6 @@ def create_routes(app, converter, file_manager):
             include_hidden_slides = request.form.get('include_hidden_slides', 'true').lower() == 'true'
             dpi = int(request.form.get('dpi', 200))
             
-            # 進行轉換
             conversion_result = converter.convert_pptx_to_all(
                 pptx_path, 
                 temp_folder_path,
@@ -71,11 +70,10 @@ def create_routes(app, converter, file_manager):
                 file_manager.cleanup_folder(temp_folder_path)
                 return jsonify({'error': conversion_result['error']}), 500
             
-            # 安排 20 分鐘後清理
             file_manager.schedule_cleanup(temp_folder_path, 20)
             
             done_time = datetime.now()
-              # 建構回應
+            
             response_data = {
                 'request_time': request_time.isoformat(),
                 'done_time': done_time.isoformat(),

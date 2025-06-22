@@ -23,16 +23,20 @@ class Config:
     # 清理配置
     DEFAULT_CLEANUP_MINUTES = int(os.environ.get('DEFAULT_CLEANUP_MINUTES', 20))
     AUTO_CLEANUP_OLD_FILES_HOURS = int(os.environ.get('AUTO_CLEANUP_OLD_FILES_HOURS', 24))
-    
-    # 轉換配置
+      # 轉換配置
     DEFAULT_DPI = int(os.environ.get('DEFAULT_DPI', 200))
     CONVERSION_TIMEOUT_SECONDS = int(os.environ.get('CONVERSION_TIMEOUT_SECONDS', 300))
-      # LibreOffice 配置
-    LIBREOFFICE_PATH = os.environ.get('LIBREOFFICE_PATH', 'libreoffice')  # Docker 中使用系統路徑
+    
+    # LibreOffice 配置
+    # Docker 環境使用系統路徑，Windows 環境使用絕對路徑
+    if os.environ.get('DOCKER_ENV') == 'true':
+        LIBREOFFICE_PATH = os.environ.get('LIBREOFFICE_PATH', 'libreoffice')
+    else:
+        # Windows 預設路徑
+        LIBREOFFICE_PATH = os.environ.get('LIBREOFFICE_PATH', 'soffice')
     
     # 安全配置
-    MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 500 * 1024 * 1024))  # 500MB
-    ALLOWED_EXTENSIONS = {'pptx'}
+    MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 500 * 1024 * 1024))  # 500MB    ALLOWED_EXTENSIONS = {'pptx'}
     
     # CORS 配置
     CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*')
@@ -41,12 +45,33 @@ class Config:
     def validate_config(cls):
         """驗證配置是否有效"""
         errors = []
-          # 檢查 LibreOffice (在 Docker 中使用 which 命令檢查)
-        import shutil
-        if not shutil.which(cls.LIBREOFFICE_PATH):
-            # 在非 Docker 環境中檢查具體路徑
-            if not os.path.exists(cls.LIBREOFFICE_PATH):
-                errors.append(f"LibreOffice 未找到: {cls.LIBREOFFICE_PATH}")
+        
+        # 檢查 LibreOffice 可用性
+        libreoffice_available = False
+        
+        # 先嘗試使用 shutil.which 檢查系統路徑
+        if shutil.which(cls.LIBREOFFICE_PATH):
+            libreoffice_available = True
+        # 如果是絕對路徑，檢查檔案是否存在
+        elif os.path.isabs(cls.LIBREOFFICE_PATH) and os.path.exists(cls.LIBREOFFICE_PATH):
+            libreoffice_available = True
+        # 嘗試常見的 LibreOffice 安裝路徑
+        else:
+            common_paths = [
+                'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
+                'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',
+                '/usr/bin/libreoffice',
+                '/opt/libreoffice/program/soffice'
+            ]
+            for path in common_paths:
+                if os.path.exists(path):
+                    cls.LIBREOFFICE_PATH = path
+                    libreoffice_available = True
+                    break
+        
+        if not libreoffice_available:
+            errors.append(f"LibreOffice 未找到: {cls.LIBREOFFICE_PATH}")
+            errors.append("請確認 LibreOffice 已安裝或設定正確的 LIBREOFFICE_PATH 環境變數")
         
         # 檢查目錄權限
         try:
