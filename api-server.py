@@ -93,10 +93,10 @@ def print_startup_info(file_manager, converter):
     print(f"  - 預設清理時間: {config_info['cleanup']['default_minutes']} 分鐘")
     print(f"  - 預設 DPI: {config_info['conversion']['default_dpi']}")
     print(f"  - 最大檔案大小: {config_info['conversion']['max_file_size_mb']:.0f}MB")
-    
-    # API 端點
+      # API 端點
     print("\nAPI 端點:")
     print("  - POST   /convert              - 轉換 PPTX 檔案")
+    print("           參數: file (必填), include_hidden_slides (可選, 預設true), dpi (可選, 預設200)")
     print("  - GET    /download/<folder>/<file> - 下載檔案")
     print("  - GET    /status/<folder>      - 檢查資料夾狀態")
     print("  - POST   /cleanup/all          - 清理所有臨時檔案")

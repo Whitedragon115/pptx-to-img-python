@@ -49,15 +49,23 @@ def create_routes(app, converter, file_manager):
         try:
             # 建立臨時資料夾
             temp_folder_name, temp_folder_path = file_manager.create_temp_folder()
-            
-            # 儲存上傳的檔案
+              # 儲存上傳的檔案
             timestamp = int(time.time() * 1000)
             pptx_filename = f"input_{timestamp}.pptx"
             pptx_path = os.path.join(temp_folder_path, pptx_filename)
             file.save(pptx_path)
             
+            # 獲取轉換參數
+            include_hidden_slides = request.form.get('include_hidden_slides', 'true').lower() == 'true'
+            dpi = int(request.form.get('dpi', 200))
+            
             # 進行轉換
-            conversion_result = converter.convert_pptx_to_all(pptx_path, temp_folder_path)
+            conversion_result = converter.convert_pptx_to_all(
+                pptx_path, 
+                temp_folder_path,
+                dpi=dpi,
+                include_hidden_slides=include_hidden_slides
+            )
             
             if not conversion_result['success']:
                 file_manager.cleanup_folder(temp_folder_path)
@@ -67,8 +75,7 @@ def create_routes(app, converter, file_manager):
             file_manager.schedule_cleanup(temp_folder_path, 20)
             
             done_time = datetime.now()
-            
-            # 建構回應
+              # 建構回應
             response_data = {
                 'request_time': request_time.isoformat(),
                 'done_time': done_time.isoformat(),
@@ -79,6 +86,10 @@ def create_routes(app, converter, file_manager):
                 ],
                 'temp_folder': temp_folder_name,
                 'cleanup_scheduled': '20 minutes from request time',
+                'conversion_params': {
+                    'dpi': dpi,
+                    'include_hidden_slides': include_hidden_slides
+                },
                 'storage_info': file_manager.get_cleanup_status()
             }
             

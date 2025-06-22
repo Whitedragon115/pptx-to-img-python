@@ -16,19 +16,21 @@ class PPTXConverter:
     def is_libreoffice_available(self):
         """檢查 LibreOffice 是否可用"""
         # 使用 shutil.which 檢查系統路徑中的命令
-        if shutil.which(self.libreoffice_path):            return True
+        if shutil.which(self.libreoffice_path):
+            return True
         # 如果是絕對路徑，檢查檔案是否存在
         if os.path.isabs(self.libreoffice_path):
             return os.path.exists(self.libreoffice_path)
         return False
     
-    def convert_pptx_to_pdf(self, pptx_file, output_dir):
+    def convert_pptx_to_pdf(self, pptx_file, output_dir, include_hidden_slides=True):
         """
         使用 LibreOffice 將 PPTX 轉換為 PDF
         
         Args:
             pptx_file (str): PPTX 檔案路徑
             output_dir (str): 輸出目錄
+            include_hidden_slides (bool): 是否包含隱藏的投影片，預設為 True
             
         Returns:
             tuple: (success: bool, result: str)
@@ -41,13 +43,25 @@ class PPTXConverter:
         # 取得 LibreOffice 實際執行檔路徑
         libreoffice_exec = shutil.which(self.libreoffice_path) or self.libreoffice_path
         
-        cmd_pdf = [
-            libreoffice_exec,
-            "--headless",
-            "--convert-to", "pdf",
-            "--outdir", output_dir,
-            pptx_path
-        ]
+        # 根據是否包含隱藏頁面來構建命令
+        if include_hidden_slides:
+            cmd_pdf = [
+                libreoffice_exec,
+                "--headless",
+                "--convert-to", "pdf",
+                "--outdir", output_dir,
+                "--infilter=impress_pdf_Export",
+                "--filter-options=ExportHiddenSlides=true",
+                pptx_path
+            ]
+        else:
+            cmd_pdf = [
+                libreoffice_exec,
+                "--headless",
+                "--convert-to", "pdf",
+                "--outdir", output_dir,
+                pptx_path
+            ]
         
         try:
             # 根據作業系統設定編碼
@@ -106,7 +120,7 @@ class PPTXConverter:
         except Exception as e:
             return False, f"圖片轉換失敗: {str(e)}"
     
-    def convert_pptx_to_all(self, pptx_file, output_dir, dpi=200):
+    def convert_pptx_to_all(self, pptx_file, output_dir, dpi=200, include_hidden_slides=True):
         """
         完整轉換流程：PPTX -> PDF -> 圖片
         
@@ -114,6 +128,7 @@ class PPTXConverter:
             pptx_file (str): PPTX 檔案路徑
             output_dir (str): 輸出目錄
             dpi (int): 圖片解析度
+            include_hidden_slides (bool): 是否包含隱藏的投影片，預設為 True
             
         Returns:
             dict: 轉換結果
@@ -127,7 +142,7 @@ class PPTXConverter:
         }
         
         # 步驟 1: 轉換為 PDF
-        pdf_success, pdf_result = self.convert_pptx_to_pdf(pptx_file, output_dir)
+        pdf_success, pdf_result = self.convert_pptx_to_pdf(pptx_file, output_dir, include_hidden_slides)
         if not pdf_success:
             result['error'] = pdf_result
             return result
