@@ -1,0 +1,30 @@
+# Python 核心依賴
+Flask==2.3.3
+Flask-CORS==4.0.0
+Werkzeug==2.3.7
+
+# PDF 和圖像處理
+pdf2image==1.16.3
+Pillow==10.0.1
+
+# 檔案處理
+python-magic==0.4.27
+
+# 系統工具
+psutil==5.9.5
+
+# 日期時間處理
+python-dateutil==2.8.2
+
+# 請求處理
+requests==2.31.0
+
+# 環境變數處理
+python-dotenv==1.0.0
+
+# 日誌處理
+colorlog==6.7.0
+
+# 開發和測試工具 (可選)
+pytest==7.4.2
+pytest-flask==1.2.0

@@ -1,0 +1,50 @@
+# 開發環境的 Docker Compose 覆蓋配置
+version: '3.8'
+
+services:
+  pptx-converter:
+    # 掛載本地代碼用於開發
+    volumes:
+      - .:/app
+      - /app/__pycache__
+      - /app/modules/__pycache__
+    
+    # 開發環境變數
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=true
+      - DEBUG=true
+      
+    # 即時重載 (需要額外的工具)
+    command: python3 -u api_server_v2.py
+    
+    # 移除健康檢查加速啟動
+    healthcheck:
+      disable: true
+
+  # 開發用的 Redis (可選)
+  redis:
+    image: redis:alpine
+    container_name: pptx-converter-redis-dev
+    ports:
+      - "6379:6379"
+    profiles:
+      - "with-redis"
+
+  # 開發用的 PostgreSQL (進階功能)
+  postgres:
+    image: postgres:13-alpine
+    container_name: pptx-converter-postgres-dev
+    environment:
+      - POSTGRES_DB=pptx_converter
+      - POSTGRES_USER=developer
+      - POSTGRES_PASSWORD=devpass123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+    profiles:
+      - "with-db"
+
+volumes:
+  postgres-dev-data:
